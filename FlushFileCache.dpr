@@ -4,9 +4,6 @@ program FlushFileCache;
 
 {$SetPEFlags $0001}
 
-{$WEAKLINKRTTI ON}
-{$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
-
 uses
    Windows;
 
@@ -53,14 +50,17 @@ begin
    Result:=NtSetSystemInformation(SystemMemoryListInformation, @buf, SizeOf(buf))
 end;
 
-function SetPrivilege(hToken : THandle; lpszPrivilege : PWideChar; bEnablePrivilege : Boolean) : Boolean;
+function SetPrivilege(hToken : THandle; lpszPrivilege : PChar; bEnablePrivilege : Boolean) : Boolean;
 var
    tp : TTokenPrivileges;
-   luid : Int64;
+   luid : TLargeInteger;
    rl : DWORD;
 begin
    if (not LookupPrivilegeValue(nil, lpszPrivilege, luid)) then
-      Exit(False);
+   begin
+      Result := False;
+      Exit;
+   end;
 
    tp.PrivilegeCount := 1;
    tp.Privileges[0].Luid := luid;
@@ -69,7 +69,10 @@ begin
    else tp.Privileges[0].Attributes := 0;
 
    if (not AdjustTokenPrivileges(hToken, FALSE, tp, sizeof(TOKEN_PRIVILEGES), nil, rl)) then
-      Exit(False);
+   begin
+      Result := False;
+      Exit;
+   end;
 
    Result := (GetLastError() <> ERROR_NOT_ALL_ASSIGNED);
 end;
