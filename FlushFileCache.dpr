@@ -10,7 +10,8 @@ uses
 type
    SYSTEM_INFORMATION_CLASS = (
       SystemFileCacheInformation = 21,
-      SystemMemoryListInformation = 80
+      SystemMemoryListInformation = 80,
+      SystemCombinePhysicalMemoryInformation = 130
    );
 
    SYSTEM_FILECACHE_INFORMATION = record
@@ -25,6 +26,13 @@ type
       Flags : ULONG;
    end;
    PSYSTEM_FILECACHE_INFORMATION = ^SYSTEM_FILECACHE_INFORMATION;
+
+   MEMORY_COMBINE_INFORMATION_EX = record
+      Handle : THandle;
+      PagesCombined : Cardinal;
+      Flags : ULONG;
+   end;
+   PMEMORY_COMBINE_INFORMATION_EX = ^MEMORY_COMBINE_INFORMATION_EX;
 
    SYSTEM_MEMORY_LIST_COMMAND = (
       MemoryCaptureAccessedBits,
@@ -81,6 +89,7 @@ var
    ntdll : HMODULE;
    processToken : THandle;
    info : SYSTEM_FILECACHE_INFORMATION;
+   infoex : MEMORY_COMBINE_INFORMATION_EX;
    command : Integer;
    option : String;
    full : Boolean;
@@ -117,40 +126,47 @@ begin
       Exit;
    end;
 
-   // Clear FileCache WorkingSet
-
+   // System working set
    if SetPrivilege(processToken, 'SeIncreaseQuotaPrivilege', True) then begin
 
       ZeroMemory(@info, sizeof(info));
       info.MinimumWorkingSet := -1;
       info.MaximumWorkingSet := -1;
       if NtSetSystemInformation(SystemFileCacheInformation, @info, sizeof(info))>=0 then
-         Writeln('Flushed FileCache WorkingSet')
-      else Writeln('Failed to flush FileCache WorkingSet');
+         Writeln('Flushed system working set')
+      else Writeln('Failed to flush system working set');
 
    end else Writeln('Failed to obtain IncreaseQuotaPrivilege');
 
-   // Purge Memory Standby
-
    if SetPrivilege(processToken, 'SeProfileSingleProcessPrivilege', True) then begin
 
+      // Working set (vista+)
       command := Integer(MemoryEmptyWorkingSets);
       if NtSetSystemInformation(SystemMemoryListInformation, @command, sizeof(command))>=0 then
-         Writeln('Emptied Memory Working Sets')
-      else Writeln('Failed to empty Memory Working Sets');
+         Writeln('Emptied working set')
+      else Writeln('Failed to empty working set');
+
+      // Standby priority-0 list (vista+)
+      if SendMemoryCommand(MemoryPurgeLowPriorityStandbyList)>=0 then
+          Writeln('Purged standby priority-0 list')
+      else Writeln('Failed to purge standby priority-0 list');
+
+      // Combine memory lists (win10+)
+      ZeroMemory(@infoex, sizeof(infoex));
+      if NtSetSystemInformation(SystemCombinePhysicalMemoryInformation, @infoex, sizeof(infoex))>=0 then
+         Writeln('Flushed combine memory lists')
+      else Writeln('Failed to flush combine memory lists');
 
       if full then begin
-         if SendMemoryCommand(MemoryFlushModifiedList)>=0 then
-            Writeln('Flush Modified List')
-         else Writeln('Failed to flush Modified List');
-
+         // Standby list (vista+)
          if SendMemoryCommand(MemoryPurgeStandbyList)>=0 then
-            Writeln('Purged Memory Standby List')
-         else Writeln('Failed to purge Memory Standby List');
+            Writeln('Purged standby list')
+         else Writeln('Failed to purge standby list');
 
-         if SendMemoryCommand(MemoryPurgeLowPriorityStandbyList)>=0 then
-            Writeln('Purged Memory Low-Priority Standby List')
-         else Writeln('Failed to purge Memory Low-Priority Standby List');
+         // Modified page list (vista+)
+         if SendMemoryCommand(MemoryFlushModifiedList)>=0 then
+            Writeln('Flushed modified page list')
+         else Writeln('Failed to flush modified page list');
       end;
 
    end else Writeln('Failed to obtain ProfileSingleProcessPrivilege');
