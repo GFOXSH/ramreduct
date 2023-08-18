@@ -94,7 +94,7 @@ var
    option : String;
    full : Boolean;
 begin
-   WriteLn('FlushFileCache v1.0 - www.DelphiTools.info'#13#10);
+   WriteLn('RAM Reduct v1.1 - www.DelphiTools.info&GFOXSH'#13#10);
 
    case ParamCount of
       0 : option:='';
